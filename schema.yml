@@ -1,0 +1,9 @@
+version: 2
+
+sources:
+  - name: trans
+    database: PR_DATABASE
+    schema: PR_SCHEMA
+    tables:
+      - name: customers
+        description: Source table for customers

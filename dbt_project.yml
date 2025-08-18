@@ -1,8 +1,4 @@
-
-# Name your project! Project names should contain only lowercase characters
-# and underscores. A good package name should reflect your organization's
-# name or the intended use of these models
-name: 'my_new_project'
+name: 't1408'
 version: '1.0.0'
 config-version: 2
 
@@ -40,3 +36,14 @@ models:
     # Applies to all files under models/example/
     example:
       +materialized: table
+
+vars:
+  source_database: PR_DATABASE
+  source_schema: PR_SCHEMA
+  target_schema: CURATED
+  audit_tables:
+    - customers
+    - policies
+  audit_table_configs:
+    - {source_table: customers, pk: customer_id}
+    - {source_table: policies,  pk: policy_id}
