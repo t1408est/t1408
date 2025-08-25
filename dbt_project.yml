@@ -37,13 +37,4 @@ models:
     example:
       +materialized: table
 
-vars:
-  source_database: PR_DATABASE
-  source_schema: PR_SCHEMA
-  target_schema: CURATED
-  audit_tables:
-    - customers
-    - policies
-  audit_table_configs:
-    - {source_table: customers, pk: customer_id}
-    - {source_table: policies,  pk: policy_id}
+
