@@ -21,19 +21,19 @@
    ======================================================================= #}
 {% macro load_with_audit_columns_m(table_name=None, schema_name=None, source_name=None, load_type=None) %}
 
-  {# --- Resolve environment variables for schemas --- #}
+  {# --- Set database and schema values from DBT environment variables --- #}
   {% set src_db   = env_var('DBT_SOURCE_DATABASE') %}
   {% set src_sch  = env_var('DBT_SOURCE_SCHEMA') %}
   {% set tgt_sch  = env_var('DBT_TARGET_SCHEMA') %}
 
-  {# --- Validate load_type --- #}
+  {# --- Check load_type input and raise error if invalid --- #}
   {% if load_type not in ['FULL_RUN','RERUN'] %}
     {% do exceptions.raise_compiler_error("Invalid load_type: " ~ load_type) %}
   {% endif %}
 
   {# --- STEP 1: Discover mappings --- #}
   {% set tbls = _fetch_mappings(schema_name, table_name, source_name, load_type) %}
-  {% if tbls | length == 0 %}
+--   {% if tbls | length == 0 %}  
     {% do exceptions.raise_compiler_error("No active ingestion mappings found.") %}
   {% endif %}
 
