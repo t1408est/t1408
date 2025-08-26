@@ -197,7 +197,7 @@
     {# --- Mark run-control row as FAILED (pessimistic) --- #}
     {% do run_query(
       "update " ~ schema_name ~ ".INGESTION_RUN_CONTROL " ~
-      "set STATUS='FAILED', ERROR_MESSAGE='Insert started but not completed' " ~
+      "set STATUS='FAILED', ERROR_MESSAGE='Insert started but not completed', COMPLETED_TS=current_timestamp " ~
       "where SOURCE_TABLE='" ~ src_tbl ~ "' and TARGET_TABLE='" ~ tgt_tbl ~ "' and LOAD_ID=" ~ load_id|string
     ) %}
 
