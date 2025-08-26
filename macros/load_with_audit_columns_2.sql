@@ -1,3 +1,5 @@
+{# full code uploaded to git#}
+
 {% macro load_with_audit_columns_2(table_name=None, schema_name=None, source_name=None) %}
   {% set src_db   = env_var('DBT_SOURCE_DATABASE') %}
   {% set src_sch  = env_var('DBT_SOURCE_SCHEMA') %}
