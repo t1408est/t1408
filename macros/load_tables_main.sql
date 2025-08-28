@@ -1,3 +1,4 @@
+
 {# =======================================================================
    Main Macro: load_with_audit_columns
    -----------------------------------------------------------------------
@@ -19,7 +20,7 @@
      - source_name  : optional filter on source
      - load_type    : FULL_RUN or RERUN
    ======================================================================= #}
-{% macro load_with_audit_columns_m(table_name=None, schema_name=None, source_name=None, load_type=None) %}
+{% macro load_with_audit_columns_m(table_name=None, log_table_name=None, schema_name=None, source_name=None, load_type=None) %}
 
   {# --- Set database and schema values from DBT environment variables --- #}
   {% set src_db   = env_var('DBT_SOURCE_DATABASE') %}
@@ -32,17 +33,17 @@
   {% endif %}
 
   {# --- STEP 1: Discover mappings --- #}
-  {% set tbls = _fetch_mappings(schema_name, table_name, source_name, load_type) %}
+  {% set tbls = _fetch_mappings(schema_name, table_name, source_name, load_type, log_table_name) %}
 --   {% if tbls | length == 0 %}  
     {% do exceptions.raise_compiler_error("No active ingestion mappings found.") %}
   {% endif %}
 
   {# --- STEP 2: Generate load_id --- #}
-  {% set load_id = _get_load_id(schema_name, load_type) %}
+  {% set load_id = _get_load_id(schema_name, load_type, log_table_name) %}
 
   {# --- STEP 3: Insert run-control entries for FULL_RUN --- #}
   {% if load_type == 'FULL_RUN' %}
-    {{ _insert_run_control(schema_name, tbls, load_id) }}
+    {{ _insert_run_control(schema_name, tbls, load_id, log_table_name) }}
   {% endif %}
 
   {# --- STEP 4: Process each mapping --- #}
@@ -52,14 +53,14 @@
     {% set tgt_rel = adapter.get_relation(database=src_db, schema=tgt_sch, identifier=tgt_tbl) %}
 
     {# pessimistic failure mark before attempting insert #}
-    {{ _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, "Insert started but not completed", "yes") }}
+    {{ _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, "Insert started but not completed", log_table_name, "yes") }}
 
     {% if not tgt_rel %}
-      {{ _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, "Target table not found", "yes") }}
+      {{ _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, "Target table not found", "yes", log_table_name) }}
       {% continue %}
     {% endif %}
 
     {# perform insert with audit columns #}
-    {{ _do_insert_with_audit(src_rel, tgt_rel, src_name, tgt_tbl, load_id, tgt_sch, schema_name, src_tbl) }}
+    {{ _do_insert_with_audit(src_rel, tgt_rel, src_name, tgt_tbl, load_id, tgt_sch, schema_name, src_tbl, log_table_name) }}
   {% endfor %}
 {% endmacro %}

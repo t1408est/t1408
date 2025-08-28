@@ -9,7 +9,7 @@
    Returns:
      List of (source_table, target_table, source_name) rows.
    ======================================================================= #}
-{% macro _fetch_mappings(schema_name, table_name, source_name, load_type, audit_table) %}
+{% macro _fetch_mappings(schema_name, table_name, source_name, load_type, audit_table, log_table_name) %}
   {% if load_type == 'RERUN' %}
     {% set query %}
       select TRAN_TABLE_NAME as source_table,
@@ -19,8 +19,8 @@
       where ISACTIVE = 'Y'
         and upper(TRAN_TABLE_NAME) in (
             select upper(SOURCE_TABLE)
-            from {{ schema_name }}.INGESTION_RUN_CONTROL
-            where LOAD_ID = (select max(LOAD_ID) from {{ schema_name }}.INGESTION_RUN_CONTROL)
+            from {{ schema_name }}.{{log_table_name}}
+            where LOAD_ID = (select max(LOAD_ID) from {{ schema_name }}.{{log_table_name}})
               and upper(STATUS) != 'SUCCESS'
         )
       {% if source_name %} and SOURCE_NAME = '{{ source_name }}' {% endif %}
@@ -50,11 +50,11 @@
      - FULL_RUN → new load_id (max + 1).
      - RERUN    → reuse the latest load_id.
    ======================================================================= #}
-{% macro _get_load_id(schema_name, load_type) %}
+{% macro _get_load_id(schema_name, load_type, log_table_name) %}
   {% set sql = (
       "select coalesce(" ~
       ("max(LOAD_ID)+1" if load_type == 'FULL_RUN' else "max(LOAD_ID)") ~
-      ",1) from " ~ schema_name ~ ".INGESTION_RUN_CONTROL"
+      ",1) from " ~ schema_name ~ "." ~ log_table_name
   ) %}
   {% set res = run_query(sql) %}
   {{ return(res.columns[0].values()[0] if execute else 1) }}
@@ -66,12 +66,12 @@
    -----------------------------------------------------------------------
    Purpose:
      For FULL_RUN only, insert NOT_STARTED entries for every mapping
-     into the INGESTION_RUN_CONTROL table.
+     into the log table.
    ======================================================================= #}
-{% macro _insert_run_control(schema_name, tbls, load_id) %}
+{% macro _insert_run_control(schema_name, tbls, load_id, log_table_name) %}
   {% for row in tbls %}
     {% do run_query(
-      "insert into " ~ schema_name ~ ".INGESTION_RUN_CONTROL " ~
+      "insert into " ~ schema_name ~ "." ~ log_table_name ~
       "(RUN_TS, SOURCE_TABLE, TARGET_TABLE, SOURCE_NAME, LOAD_ID, STATUS, RUN_BY, MACRO_NAME) " ~
       "values (current_timestamp,'" ~ row[0] ~ "','" ~ row[1] ~ "','" ~ row[2] ~ "'," ~ load_id|string ~
       ",'NOT_STARTED', current_user,'load_with_audit_columns')"
@@ -86,7 +86,7 @@
    Purpose:
      Marks the given mapping as FAILED in run-control with an error message.
    ======================================================================= #}
-  {% macro _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, msg, run_ts="no") %}
+  {% macro _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, msg, log_table_name, run_ts="no") %}
     {% set ts_clause = "" %}
     {% do log("run_ts: " ~ run_ts , info=True) %}
 
@@ -95,8 +95,8 @@
     {% endif %}
 
     {% do run_query(
-      "update " ~ schema_name ~ ".INGESTION_RUN_CONTROL " ~
-      "set STATUS='FAILED', COMPLETED_TS=current_timestamp, ERROR_MESSAGE='" ~ msg ~ "'" ~ ts_clause ~ " " ~
+      "update " ~ schema_name ~ "." ~ log_table_name ~
+      " set STATUS='FAILED', COMPLETED_TS=current_timestamp, ERROR_MESSAGE='" ~ msg ~ "'" ~ ts_clause ~ " " ~
       "where SOURCE_TABLE='" ~ src_tbl ~ "' and TARGET_TABLE='" ~ tgt_tbl ~ "' and LOAD_ID=" ~ load_id|string
     ) %}
   {% endmacro %}
@@ -109,10 +109,10 @@
    Purpose:
      Marks the given mapping as SUCCESS and records number of rows inserted.
    ======================================================================= #}
-{% macro _mark_success(schema_name, src_tbl, tgt_tbl, load_id, count) %}
+{% macro _mark_success(schema_name, src_tbl, tgt_tbl, load_id, count, log_table_name) %}
   {% do run_query(
-    "update " ~ schema_name ~ ".INGESTION_RUN_CONTROL " ~
-    "set STATUS='SUCCESS', ERROR_MESSAGE=NULL, COMPLETED_TS=current_timestamp, RECORDS_INSERTED=" ~ count|string ~
+    "update " ~ schema_name ~ "." ~ log_table_name ~
+    " set STATUS='SUCCESS', ERROR_MESSAGE=NULL, COMPLETED_TS=current_timestamp, RECORDS_INSERTED=" ~ count|string ~
     " where SOURCE_TABLE='" ~ src_tbl ~ "' and TARGET_TABLE='" ~ tgt_tbl ~ "' and LOAD_ID=" ~ load_id|string
   ) %}
 {% endmacro %}
@@ -129,7 +129,7 @@
    Notes:
      A LIMIT 10 is included temporarily for validation.
    ======================================================================= #}
-{% macro _do_insert_with_audit(src_rel, tgt_rel, src_name, tgt_tbl, load_id, tgt_sch, schema_name, src_tbl) %}
+{% macro _do_insert_with_audit(src_rel, tgt_rel, src_name, tgt_tbl, load_id, tgt_sch, schema_name, src_tbl, log_table_name) %}
   {% set insert_sql %}
     insert into {{ adapter.quote(tgt_sch) }}.{{ adapter.quote(tgt_tbl) }}
     (
@@ -151,6 +151,6 @@
   {% call statement('insert_' ~ src_tbl, fetch_result=True) %}{{ insert_sql }}{% endcall %}
   {% set res = load_result('insert_' ~ src_tbl) %}
   {% if res and res["response"].code == 'SUCCESS' %}
-    {{ _mark_success(schema_name, src_tbl, tgt_tbl, load_id, res["response"].rows_affected) }}
+    {{ _mark_success(schema_name, src_tbl, tgt_tbl, load_id, res["response"].rows_affected, log_table_name) }}
   {% endif %}
 {% endmacro %}
