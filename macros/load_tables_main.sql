@@ -52,6 +52,8 @@
     {% set src_rel = adapter.get_relation(database=src_db, schema=src_sch, identifier=src_tbl) %}
     {% set tgt_rel = adapter.get_relation(database=src_db, schema=tgt_sch, identifier=tgt_tbl) %}
 
+    {% do log("load started for : " ~ src_rel , info=True) %}
+
     {# pessimistic failure mark before attempting insert #}
     {{ _mark_failed(schema_name, src_tbl, tgt_tbl, load_id, "Insert started but not completed", log_table_name, "yes") }}
 
@@ -62,5 +64,6 @@
 
     {# perform insert with audit columns #}
     {{ _do_insert_with_audit(src_rel, tgt_rel, src_name, tgt_tbl, load_id, tgt_sch, schema_name, src_tbl, log_table_name) }}
+    {% do log("load succeeded for : " ~ src_rel , info=True) %}
   {% endfor %}
 {% endmacro %}
